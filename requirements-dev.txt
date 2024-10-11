@@ -1,0 +1,4 @@
+httpx
+pytest
+ruff
+pre-commit

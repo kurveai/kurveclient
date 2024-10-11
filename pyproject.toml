@@ -1,0 +1,70 @@
+[build-system]
+requires = ["setuptools >= 61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kurveclient"
+version = "0.1"
+dynamic = ["dependencies", "optional-dependencies"]
+requires-python = ">=3.10"
+authors = [
+  {name = "Wes Madrigal", email = "wes@kurve.ai"}
+]
+maintainers = [
+  {name = "Wes Madrigal", email = "wes@kurve.ai"}
+]
+description = "A client for the Kurve backend."
+readme = "README.md"
+keywords = [
+    "knowledge discovery",
+    "data discovery",
+    "inclusion dependency discovery",
+    "schema discovery",
+    "data visualization",
+    "entity linking",
+    "graph algorithms",
+    "knowledge graph",
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Education",
+    "Intended Audience :: Information Technology",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+]
+
+
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements.txt"]}
+optional-dependencies.dev = { file = ["requirements-dev.txt"] }
+
+[tool.setuptools.packages]
+find = {}
+
+[project.urls]
+"Source" = "http://github.com/kurveai/kurveclient"
+"Issue Tracker" = "https://github.com/kurveai/kurveclient/issues"
+
+[tool.pytest.ini_options]
+pythonpath = [
+  ".", "kurveclient"
+]
+
+[tool.ruff]
+line-length = 99
+
+[tool.ruff.lint]
+# Add the `line-too-long` rule to the enforced rule set. By default, Ruff omits rules that
+# overlap with the use of a formatter, like Black, but we can override this behavior by
+# explicitly adding the rule.
+# List of rules at https://docs.astral.sh/ruff/rules/
+extend-select = ["E501"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+docstring-code-format = true

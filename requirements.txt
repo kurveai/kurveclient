@@ -1,0 +1,6 @@
+fastapi
+uvicorn
+python-multipart
+pydantic-settings
+boto3
+structlog
