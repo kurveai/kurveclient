@@ -1,2 +1,2 @@
-# kurve-client
+# kurveclient
 Kurve Open Source client
