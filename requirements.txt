@@ -1,5 +1,7 @@
+bs4
 fastapi
 uvicorn
+pandas
 python-multipart
 pydantic-settings
 structlog

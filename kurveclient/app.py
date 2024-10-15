@@ -33,8 +33,6 @@ def callback(request: Request):
     if not os.path.isdir(os.path.join(upath, '.kurve')):
         os.mkdir(os.path.join(upath, '.kurve'))
 
-    print(params)
-
     with open(os.path.join(upath, '.kurve/config.json'), 'w') as f:
         f.write(json.dumps({'access_token':params['access_token'],'refresh_token':params['refresh_token']}))
     path = os.path.join(upath, '.kurve/config.json')

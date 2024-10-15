@@ -6,13 +6,14 @@ import time
 from pathlib import Path
 import subprocess
 import signal
+import typing
+import pathlib
 
 # third party
 import requests
 from rich.console import Console
 from structlog import get_logger
 import typer
-
 
 auth_cli= typer.Typer(name="auth", help="Kurve client cli", no_args_is_help=True)
 console = Console()
@@ -22,7 +23,7 @@ logger = get_logger(__name__)
 API_BASE = os.getenv('KURVE_API_ENDPOINT', 'https://demo.kurve.ai')
 
 
-def _auth ():
+def do_auth ():
     home = Path.home()
     if Path(home / '.kurve' / 'config.json').exists():
         # read the current config
@@ -45,6 +46,7 @@ def _auth ():
     else:
         web_url = f'{API_BASE}/login_auth0?client_callback=true'
         pid = _start_app()
+        console.print(f"Started web server with process {pid}")
         console.print(f"Please visit the following link on a browser to finish authenticating: \n[link={web_url}]{web_url}[/link]\n")
         finished = False
         i = 0
@@ -73,5 +75,42 @@ def _teardown_app (pid) -> bool:
     return bool
 
 
+def _load_tokens ():
+    home = pathlib.Path.home()
+    if pathlib.Path(home / '.kurve' / 'config.json').exists():
+        console.print('[green]Found tokens[/green]')
+        with open(pathlib.Path(home / '.kurve' / 'config.json'), 'r') as f:
+            return json.loads(f.read())
+    console.print('[red]User not authenticated! Must run[/red][green]kurveclient auth[/green][red] to continue[/red]')
+
+
+def _signed_request (
+        endpoint,
+        method: str,
+        payload: typing.Optional[dict] = None
+        ) -> requests.Response:
+    tokens = _load_tokens()
+    cookies = {
+            'jwt_access_cookie': tokens['access_token'],
+            'jwt_refresh_cookie': tokens['refresh_token']
+            }
+    if method == 'get':
+        return requests.get(endpoint, cookies=cookies)
+    elif method == 'post':
+        if payload:
+            return requests.post(
+                    endpoint,
+                    json=payload,
+                    cookies=cookies
+                    )
+        else:
+            return requests.post(
+                    endpoint,
+                    cookies=cookies
+                    )
+    else:
+        raise NotImplementedError(f"{method} not implemented")
+
+
 if __name__ == '__main__':
-    _auth()
+    do_auth()
