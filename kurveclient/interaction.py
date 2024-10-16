@@ -40,7 +40,6 @@ def list_providers():
     return json.loads(resp.text)
 
 
-
 def list_sources (
         include_open: bool = True,
         to_df: bool = False
@@ -126,6 +125,27 @@ List the graph nodes.
     if to_df:
         return _todf(nodes)
     return nodes
+
+
+def get_node (
+        graph_id: int,
+        node_id: int
+        ) -> dict:
+    """
+Get a single node.
+   
+    Parameters
+    ----------
+    graph_id: int id of graph
+    node_id: int id of node
+
+    Returns
+    ---------
+    node: dict of node
+    """
+    endpoint = f'{API_BASE}/{API_VERSION}/graphs/{graph_id}/nodes/{node_id}'
+    resp = _signed_request(endpoint, 'get')
+    return json.loads(resp.text)
 
 
 def list_edges (

@@ -1,0 +1,44 @@
+site_name: kurveclient
+
+site_url: https://github.com/kurveai/kurve-client
+repo_url: https://github.com/kurveai/kurve-client
+repo_name: kurveai/kurve-client
+
+theme:
+  name: material
+
+  palette: 
+    - primary: indigo
+    # Palette toggle for light mode
+    - scheme: default
+      toggle:
+        icon: material/brightness-7 
+        name: Switch to dark mode
+
+    # Palette toggle for dark mode
+    - scheme: slate
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+          #theme:
+          #  name: material
+          #  palette:
+          #    accent: green
+          #  features:
+          #    - navigation.instant
+          #    - navigation.tabs
+          #    - navigation.tabs.sticky
+
+nav:
+  - Home: index.md
+  - Concepts: concepts.md
+
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
