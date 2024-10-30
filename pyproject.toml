@@ -4,9 +4,9 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kurveclient"
-version = "0.1.1"
+version = "0.1.2"
 dynamic = ["dependencies", "optional-dependencies"]
-requires-python = ">=3.10"
+requires-python = ">=3.9"
 authors = [
   {name = "Wes Madrigal", email = "wes@kurve.ai"}
 ]
