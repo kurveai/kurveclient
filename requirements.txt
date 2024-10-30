@@ -1,6 +1,7 @@
 bs4
 fastapi
 fastapi[standard]
+graphreduce==1.6.9
 uvicorn
 pandas
 python-multipart
