@@ -78,10 +78,9 @@ def _teardown_app (pid) -> bool:
 def _load_tokens ():
     home = pathlib.Path.home()
     if pathlib.Path(home / '.kurve' / 'config.json').exists():
-        console.print('[green]Found tokens[/green]')
         with open(pathlib.Path(home / '.kurve' / 'config.json'), 'r') as f:
             return json.loads(f.read())
-    console.print('[red]User not authenticated! Must run[/red][green]kurveclient auth[/green][red] to continue[/red]')
+    console.print('[red]User not authenticated! Must run[/red] [green]kurveclient.interactions.do_auth( [/green][red] to continue[/red]')
 
 
 def _signed_request (
@@ -98,9 +97,15 @@ def _signed_request (
         return requests.get(endpoint, cookies=cookies)
     elif method == 'post':
         if payload:
+            # Serialize data with custom JSON encoding
+            json_data = json.dumps(payload, default=str)
             return requests.post(
                     endpoint,
-                    json=payload,
+                    data=json_data,
+                    headers={
+                        'Content-Type':'application/json'
+                        },
+                    #json=payload,
                     cookies=cookies
                     )
         else:

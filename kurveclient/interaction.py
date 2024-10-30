@@ -7,12 +7,14 @@ import typing
 import subprocess
 import time
 import signal
+import datetime
 
 import requests
 from rich.console import Console
 import pandas as pd
 
 from kurveclient.auth import _signed_request
+from kurveclient.models import LocalPayload, RestCatalogPayload, S3Payload
 
 console = Console()
 
@@ -66,6 +68,25 @@ List the data sources.
     return sources
 
 
+def create_source (
+        payload: typing.Union[LocalPayload, RestCatalogPayload, S3Payload],
+        ) -> dict:
+    """
+Create a data source.
+
+    Parameters
+    -----------
+    payload: pydantic model representing the data source
+
+    Returns
+    -----------
+    source: dict of the created source
+    """
+    endpoint = f'{API_BASE}/{API_VERSION}/add_source'
+    resp = _signed_request(endpoint, method='post', payload=payload.dict())
+    return json.loads(resp.text)
+
+
 def list_entities (
         source_id: int,
         to_df: bool = False
@@ -100,6 +121,12 @@ def create_graph(source_id: int):
     payload = {'source_id': source_id}
     endpoint = f'{API_BASE}/{API_VERSION}/create_graph'
     resp = _signed_request(endpoint, 'post', payload=payload)
+    return json.loads(resp.text)
+
+
+def get_graph(source_id: int):
+    endpoint = f'{API_BASE}/{API_VERSION}/graphs?source_id={source_id}'
+    resp = _signed_request(endpoint, 'get')
     return json.loads(resp.text)
 
 
@@ -228,9 +255,45 @@ Expose a directory to the internet.
             }
 
 
-def _create_source_from_dir (
+def _enumerate_directory (
         path: typing.Union[str, pathlib.Path],
-        storage_format: typing.Optional[str] = None
+        file_format: str,
+        n_rows: int = 5,
+        ) -> dict:
+    """
+Enumerate a directory.
+    """
+    if isinstance(path, str):
+        path = pathlib.Path(path)
+    if not path.exists():
+        raise Exception(f'{path} does not exist')
+    files = []
+    # This will not work for partitioned
+    # columnar format directories.
+    for f in path.iterdir():
+        if f.is_file() and (file_format in f.suffix or file_format == f.suffix):
+            files.append(f.name)
+    # For each file in the directory 
+    # read in a sample of `n` rows
+    # and create dictionaries.
+    data_samples = {}
+    for f in path.iterdir():
+        if f.name in files:
+            df = getattr(pd, f'read_{file_format}')(str(f))
+            samp = [{c:r[c] for c in df.columns} for ix, r in df.head(n_rows).iterrows()]
+            data_samples[f.name] = samp
+    return {
+            'files': files,
+            'directory': str(path),
+            'data_samples': data_samples,
+            'storage_format': file_format
+            }
+
+
+def create_source_from_dir (
+        path: typing.Union[str, pathlib.Path],
+        storage_format: typing.Optional[str] = None,
+        n_rows: int = 5,
         ) -> dict:
     """
 Given a directory path create a source.
@@ -245,11 +308,26 @@ Given a directory path create a source.
     source_record: dict source record
     """
 
+    if 'error' not in get_source_from_dir(path):
+        return get_source_from_dir(path)
+
     console.print(f'[green]creating source from directory {path}[/green]')
     if isinstance(path, str):
         path = pathlib.Path(path)
     if not path.exists():
         raise Exception(f'{path} does not exist')
+
+    dirdata = _enumerate_directory(path, storage_format, n_rows=n_rows)
+    # POST to the kurve backend for source
+    # creation.
+    endpoint = f'{API_BASE}/{API_VERSION}/stored_source'
+    # Creates the source or gets
+    # a pre-existing source.
+    resp = _signed_request(endpoint, 'post', payload=dirdata)
+    return json.loads(resp.text)
+    
+
+    ######### ORIGINAL IMPLEMENTATION ##############
     file_map = _expose_directory(path)
     # Check the response html for all of the files.
     ngrok_endpoint = file_map['endpoint']
@@ -270,7 +348,7 @@ Given a directory path create a source.
     return json.loads(resp.text)
 
 
-def _get_source_from_dir (
+def get_source_from_dir (
         path: typing.Union[str, pathlib.Path] = None,
         ) -> dict:
     """
@@ -292,6 +370,7 @@ Given a directory path get a source if it exists.
 def map_local_source (
         path: typing.Union[str, pathlib.Path],
         storage_format: typing.Optional[str] = None,
+        n_rows: int = 100,
         ) -> dict:
     """
 Given a directory path map the data.
@@ -313,9 +392,147 @@ Given a directory path map the data.
 
     # Take a look at the files in
     # the path and find out their formats.
-    source_data = _create_source_from_dir(path)
+    source_data = create_source_from_dir(path, n_rows=n_rows)
     if 'error' in source_data:
-        source_data = _get_source_from_dir(path)
+        source_data = get_source_from_dir(path)
 
     graph_data = create_graph(source_data['data']['id'])
     return graph_data
+
+
+def prefix(ident: str):
+    if len(ident.split('_')) > 1:
+        parts = ident.split('_')
+        return ''.join([_[0:2] for _ in parts])
+    else:
+        return ident[0:4]
+
+
+def autofe_local_source (
+        path: typing.Union[str, pathlib.Path],
+        storage_format: typing.Optional[str] = None,
+        parent_node: str = '',
+        label_node: str = '',
+        label_field: str = 'id',
+        label_operation: str = 'count',
+        compute_period: int = 365,
+        label_period: int = 30,
+        cut_date : datetime.datetime = datetime.datetime.now(),
+        hops_front: int = 1,
+        hops_back: int = 2,
+        ) -> pd.DataFrame:
+    """
+Perform automatic feature engineering on a local
+data source and return the results.
+    """
+    source_data = create_source_from_dir(path, storage_format=storage_format)
+    source_id = source_data['data']['id']
+    graphs = list_graphs()
+    if len([x for x in graphs['data'] if x['source_id'] == source_id]):
+        graph_id = [x for x in graphs['data'] if x['source_id'] == source_id][0]['id']
+    else:
+        create_graph(source_id)
+        graph_id = None
+    if not graph_id:
+        start = time.time()
+        while not graph_id:            
+            console.print(f'[blue]Waiting on graph to finish building {path} {round(time.time()-start, 1)} passed[/blue]')
+            time.sleep(10)
+            graphs = list_graphs()
+            if len([x for x in graphs['data'] if x['source_id'] == source_id]):
+                graph_id = [x for x in graphs['data'] if x['source_id'] == source_id][0]['id']
+                console.print(f'[green]Graph finished building![/green]')
+
+    edges = list_edges(graph_id,to_df=True)
+    edges['node_one_identifier'] = edges.apply(lambda x:
+                f"{x['original_directory']}/{x['node_one_identifier'].split('/')[-1]}", axis=1)
+    edges['node_two_identifier'] = edges.apply(lambda x:
+                f"{x['original_directory']}/{x['node_two_identifier'].split('/')[-1]}", axis=1)
+    # now we should have a graph id.
+    from graphreduce.node import GraphReduceNode, DynamicNode
+    from graphreduce.graph_reduce import GraphReduce
+    from graphreduce.enum import PeriodUnit, ComputeLayerEnum
+    gr_nodes = {}
+    for ix, edge in edges.iterrows():
+        n1id = edge['node_one_identifier']
+        n2id = edge['node_two_identifier']
+        if not gr_nodes.get(n1id):
+            gr_nodes[n1id] = DynamicNode(
+                fpath=n1id,
+                fmt=n1id.split('.')[-1],
+                compute_layer=ComputeLayerEnum.pandas,
+                pk=edge['node_one_pk'],
+                date_key=edge['node_one_date_key'],
+                prefix=prefix(n1id.split('/')[-1])
+                )
+        if not gr_nodes.get(n2id):
+            gr_nodes[n2id] = DynamicNode(
+                    fpath=n2id,
+                    fmt=n2id.split('.')[-1],
+                    compute_layer=ComputeLayerEnum.pandas,
+                    pk=edge['node_two_pk'],
+                    date_key=edge['node_two_date_key'],
+                    prefix=prefix(n2id.split('/')[-1])
+                    )
+    gr = GraphReduce(
+            name='kurveclient',
+            parent_node=gr_nodes[parent_node],
+            compute_layer=ComputeLayerEnum.pandas,
+            fmt=storage_format,
+            compute_period_val=compute_period,
+            compute_period_unit=PeriodUnit.day,
+            cut_date=cut_date,
+            label_period_val=label_period,
+            label_period_unit=PeriodUnit.day,
+            label_node=gr_nodes[label_node],
+            label_field=label_field,
+            label_operation=label_operation,
+            auto_features=True,
+            auto_features_hops_front=hops_front,
+            auto_features_hops_back=hops_back
+            )
+    for key, node in gr_nodes.items():
+        gr.add_node(node)
+    for ix, edge in edges.iterrows():
+        # get the node one node
+        # get the node two node
+        # add the edge directionally where the parent is always `node_two`
+        node_one = gr_nodes[edge['node_one_identifier']]
+        node_two = gr_nodes[edge['node_two_identifier']]
+        gr.add_entity_edge(
+            parent_node=node_two,
+            relation_node=node_one,
+            parent_key=edge['node_two_fields'],
+            relation_key=edge['node_one_fields'],
+            reduce=True,
+            reduce_after_join=False
+        )
+    gr.do_transformations()
+    return gr.parent_node.df
+
+
+
+def autofe_catalog (
+        source_id: int,
+        parent_node: str = '',
+        label_node: str = '',
+        label_field: str = 'id',
+        label_operation: str = 'count',
+        compute_period: int = 365,
+        label_period: int = 30,
+        cut_date : datetime.datetime = datetime.datetime.now(), 
+        ):
+    pass
+
+
+def autofe_remote_source (
+        source_id: int,
+        parent_entity: str,
+        compute_period: int = 365,
+        label_period: int = 30,
+        ) -> str:
+    """
+Perform automatic feature engineering on a remote
+source and return the table name.
+    """
+    pass

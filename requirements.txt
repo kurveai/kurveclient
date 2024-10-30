@@ -1,5 +1,6 @@
 bs4
 fastapi
+fastapi[standard]
 uvicorn
 pandas
 python-multipart
