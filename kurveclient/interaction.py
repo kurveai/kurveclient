@@ -392,7 +392,7 @@ Given a directory path map the data.
 
     # Take a look at the files in
     # the path and find out their formats.
-    source_data = create_source_from_dir(path, n_rows=n_rows)
+    source_data = create_source_from_dir(path, storage_format=storage_format, n_rows=n_rows)
     if 'error' in source_data:
         source_data = get_source_from_dir(path)
 
@@ -436,8 +436,8 @@ data source and return the results.
     if not graph_id:
         start = time.time()
         while not graph_id:            
-            console.print(f'[blue]Waiting on graph to finish building {path} {round(time.time()-start, 1)} passed[/blue]')
-            time.sleep(10)
+            console.print(f'[blue]Waiting on graph to finish inferring {path} passed[/blue]')
+            time.sleep(20)
             graphs = list_graphs()
             if len([x for x in graphs['data'] if x['source_id'] == source_id]):
                 graph_id = [x for x in graphs['data'] if x['source_id'] == source_id][0]['id']
