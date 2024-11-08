@@ -425,7 +425,7 @@ def autofe_local_source (
 Perform automatic feature engineering on a local
 data source and return the results.
     """
-    source_data = create_source_from_dir(path, storage_format=storage_format)
+    source_data = create_source_from_dir(path, storage_format=storage_format, n_rows=100)
     source_id = source_data['data']['id']
     graphs = list_graphs()
     if len([x for x in graphs['data'] if x['source_id'] == source_id]):
@@ -509,7 +509,6 @@ data source and return the results.
         )
     gr.do_transformations()
     return gr.parent_node.df
-
 
 
 def autofe_catalog (
