@@ -400,12 +400,23 @@ Given a directory path map the data.
     return graph_data
 
 
-def prefix(ident: str):
-    if len(ident.split('_')) > 1:
-        parts = ident.split('_')
-        return ''.join([_[0:2] for _ in parts])
+def prefix(name, prefixes:list = [], chars=4, split_chars=2):
+    if '_' in name:
+        pre = ''.join([x[0:split_chars] for x in name.split('_')])
+        if pre in prefixes and chars < 10:
+            return prefix(name, prefixes, chars=chars+1, split_chars=split_chars+1)
+        elif chars >= 10:
+            # add a salt
+            pre = pre+''.join([chr(random.randrange(97,123)) for i in range(3)])
+        return pre
     else:
-        return ident[0:4]
+        pre = name[0:chars]
+        if pre in prefixes:
+            return prefix(name, prefixes, chars=chars+1, split_chars=split_chars+1)
+        elif chars >= 10:
+            # add a salt
+            pre = pre+''.join([chr(random.randrange(97,123)) for i in range(3)])
+        return pre
 
 
 def autofe_local_source (
@@ -453,26 +464,31 @@ data source and return the results.
     from graphreduce.graph_reduce import GraphReduce
     from graphreduce.enum import PeriodUnit, ComputeLayerEnum
     gr_nodes = {}
+    prefixes = []
     for ix, edge in edges.iterrows():
         n1id = edge['node_one_identifier']
         n2id = edge['node_two_identifier']
         if not gr_nodes.get(n1id):
+            pre = prefix(n1id.split('/')[-1], prefixes=prefixes)
+            prefixes.append(pre)
             gr_nodes[n1id] = DynamicNode(
                 fpath=n1id,
                 fmt=n1id.split('.')[-1],
                 compute_layer=ComputeLayerEnum.pandas,
                 pk=edge['node_one_pk'],
                 date_key=edge['node_one_date_key'],
-                prefix=prefix(n1id.split('/')[-1])
+                prefix=pre
                 )
         if not gr_nodes.get(n2id):
+            pre2 = prefix(n2id.split('/')[-1], prefixes=prefixes)
+            prefixes.append(pre2)
             gr_nodes[n2id] = DynamicNode(
                     fpath=n2id,
                     fmt=n2id.split('.')[-1],
                     compute_layer=ComputeLayerEnum.pandas,
                     pk=edge['node_two_pk'],
                     date_key=edge['node_two_date_key'],
-                    prefix=prefix(n2id.split('/')[-1])
+                    prefix=pre2
                     )
     gr = GraphReduce(
             name='kurveclient',
