@@ -12,6 +12,7 @@ import datetime
 import requests
 from rich.console import Console
 import pandas as pd
+import pyspark
 
 from kurveclient.auth import _signed_request
 from kurveclient.models import LocalPayload, RestCatalogPayload, S3Payload
@@ -521,6 +522,104 @@ data source and return the results.
             parent_key=edge['node_two_fields'],
             relation_key=edge['node_one_fields'],
             reduce=True,
+            reduce_after_join=False
+        )
+    gr.do_transformations()
+    return gr.parent_node.df
+
+
+
+def autofe_spark_source (
+        graph_id: int,
+        storage_format: typing.Optional[str] = None,
+        parent_node: str = '',
+        label_node: str = '',
+        label_field: str = 'id',
+        label_operation: str = 'count',
+        compute_period: int = 365,
+        label_period: int = 30,
+        cut_date : datetime.datetime = datetime.datetime.now(),
+        hops_front: int = 1,
+        hops_back: int = 2,
+        spark_sqlctx: typing.Any = None,
+        label_nodes: typing.Dict = {},
+        ) -> pyspark.sql.DataFrame:
+    """
+Perform automatic feature engineering on a local
+data source and return the results.
+    """
+  
+    edges = list_edges(graph_id,to_df=True)
+
+    from graphreduce.node import GraphReduceNode, DynamicNode
+    from graphreduce.graph_reduce import GraphReduce
+    from graphreduce.enum import PeriodUnit, ComputeLayerEnum
+    gr_nodes = {}
+    prefixes = []
+    for ix, edge in edges.iterrows():
+        n1 = edge['node_one_identifier']
+        n1pk = edge['node_one_pk']
+        n2 = edge['node_two_identifier']
+        n2pk = edge['node_two_pk']
+        if not gr_nodes.get(n1):
+            pre = prefix(n1.split('.')[-1], prefixes=prefixes)
+            gr_nodes[n1] = DynamicNode(
+                fpath=n1,
+                fmt='sql',
+                prefix=pre,
+                pk=n1pk,
+                date_key=edge['node_one_date_key'],
+                label_field=label_nodes.get(n1, None)
+                )
+            prefixes.append(pre)
+        if not gr_nodes.get(n2):
+            pre = prefix(n2.split('.')[-1], prefixes=prefixes)
+            gr_nodes[n2] = DynamicNode(
+                fpath=n2,
+                fmt='sql',
+                prefix=pre,
+                pk=n2pk,
+                date_key=edge['node_two_date_key'],
+                label_field=label_nodes.get(n2, None)
+                )
+            prefixes.append(pre)
+
+    # now we should have a graph id.
+    from graphreduce.node import GraphReduceNode, DynamicNode
+    from graphreduce.graph_reduce import GraphReduce
+    from graphreduce.enum import PeriodUnit, ComputeLayerEnum
+    gr = GraphReduce(
+            name='kurveclient',
+            parent_node=gr_nodes[parent_node],
+            compute_layer=ComputeLayerEnum.spark,
+            fmt=storage_format,
+            compute_period_val=compute_period,
+            compute_period_unit=PeriodUnit.day,
+            cut_date=cut_date,
+            label_period_val=label_period,
+            label_period_unit=PeriodUnit.day,
+            label_node=gr_nodes[label_node],
+            label_field=label_field,
+            label_operation=label_operation,
+            auto_features=True,
+            auto_features_hops_front=hops_front,
+            auto_features_hops_back=hops_back,
+            spark_sqlctx=spark_sqlctx
+            )
+    for key, node in gr_nodes.items():
+        gr.add_node(node)
+    for ix, edge in edges.iterrows():
+        # get the node one node
+        # get the node two node
+        # add the edge directionally where the parent is always `node_two`
+        node_one = gr_nodes[edge['node_one_identifier']]
+        node_two = gr_nodes[edge['node_two_identifier']]
+        gr.add_entity_edge(
+            parent_node=node_two,
+            relation_node=node_one,
+            parent_key=edge['node_two_fields'],
+            relation_key=edge['node_one_fields'],
+            reduce=True if edge['cardinality'] == 'many:one' else False,
             reduce_after_join=False
         )
     gr.do_transformations()
