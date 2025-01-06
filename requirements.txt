@@ -5,6 +5,7 @@ graphreduce==1.6.9
 uvicorn
 pandas
 python-multipart
+pyspark
 structlog
 requests
 rich
