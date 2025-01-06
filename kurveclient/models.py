@@ -17,7 +17,7 @@ class RestCatalogPayload(BaseModel):
     catalog_uri: str
     catalog_namespaces: str
     catalog_credential: str
-    catalog_scope: str
+    catalog_scope: str = 'all'
 
 
 class S3Payload(BaseModel):
